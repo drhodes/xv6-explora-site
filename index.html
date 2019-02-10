@@ -137,8 +137,8 @@
 <hr>
 <div> <!-- chapter 0 -->
   <h1><a name="chapter0"></a></h1>
-  <center><h1>CHAPTER 0</h1></center>
-  <center><h1>Operating System Interfaces</h1></center>
+  <center><center><h1>CHAPTER 0</h1></center></center>
+  <center><center><h1>Operating System Interfaces</h1></center></center>
   <p>
     The job of an operating system is to share a computer among multiple programs
     and to provide a more useful set of services than the hardware alone supports. The
@@ -892,7 +892,7 @@
   The Unix system call interface has been standardized through the
   Portable Operating System Interface (POSIX) standard. Xv6
   is <i>not</i> POSIX compliant.  It misses system calls (including
-  basic ones such as <code>lseek</code>), it implements systems calls
+  basic ones such as <code>lseek</code>), it implements system calls
   only partially, etc.  Our main goals for xv6 are simplicity and
   clarity while providing a simple UNIX-like system-call interface.
   Several people have extended xv6 with a few more basic system calls
@@ -946,7 +946,7 @@
 
 
 <h1><a name="chapter1">CHAPTER 1</a></h1> 
-<h1>Operating System Organization</h1>
+<center><h1>Operating System Organization</h1></center>
 <div>
   <p>
     A key requirement for an operating system is to support several
@@ -993,7 +993,9 @@
   <p>
     The first question one might ask when encountering an operating system is why
     have it at all?  That is, one could implement the system calls in
-    .figref unix:api
+     
+    <a class="popoverOption" href="#fig1-1" data-content="<img src='figs/fig1-1.jpg' alt='figure 1-1'>" 
+    rel="popover" data-placement="bottom" data-original-title="Figure 1-1">Figure 1-1</a>
     as a library, with which applications link. In this plan,
     each application could even have its own library tailored to its needs.
     Applications could directly interact with hardware resources
@@ -1047,7 +1049,9 @@
     end-of-file for the next process in the pipeline.
   </p>
   <p>
-    As you can see, the system call interface in .figref unix:api is
+    As you can see, the system call interface in  
+    <a class="popoverOption" href="#fig1-1" data-content="<img src='figs/fig1-1.jpg' alt='figure 1-1'>" 
+    rel="popover" data-placement="bottom" data-original-title="Figure 1-1">Figure 1-1</a> is
     carefully designed to provide both programmer convenience and the
     possibility of strong isolation. The Unix interface is not the
     only way to abstract resources, but it has proven to be a very
@@ -1078,7 +1082,9 @@
     to execute a privileged instruction, then the processor doesn't
     execute the instruction, but switches to kernel mode so that the
     software in kernel mode can clean up the application, because it
-    did something it shouldn't be doing. .figref unix:os Figure 0-1 in
+    did something it shouldn't be doing.  
+    <a class="popoverOption" href="#fig0-1" data-content="<img src='figs/fig0-1.jpg' alt='figure 0-1'>" 
+    rel="popover" data-placement="bottom" data-original-title="Figure 0-1">Figure 0-1</a> in
     in Chapter 0 illustrates this organization. An application can
     execute only user-mode instructions (e.g., adding numbers, etc.)
     and is said to be running in <i>"user space"</i>, while the
@@ -1957,7 +1963,7 @@
 <hr>
 <h1><a name="chapter2">CHAPTER 2</a></h1>
 
-<h1>Page tables</h1>
+<center><h1>Page tables</h1></center>
 
 <div>
 <p>
@@ -2649,13 +2655,454 @@ Program Header:
   9. How would you improve xv6's memory layout if xv6 where running on a 64-bit
   processor?
 </p>
+
+
+
+<h1>Homework: xv6 lazy page allocation</h1>
+
+<p>Submit your solutions before the beginning of the next lecture to the
+  <a href="https://6828.scripts.mit.edu/2018/handin.py/">submission web site</a>.
+</p>
+
+<p>
+  One of the many neat tricks an O/S can play with page table hardware
+  is lazy allocation of heap memory. Xv6 applications ask the kernel for
+  heap memory using the <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sbrk</a></code>() system call. In the kernel we've given
+  you, <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sbrk</a></code>() allocates physical memory and maps it into the process's
+  virtual address space. There are programs that allocate memory but
+  never use it, for example to implement large sparse arrays.
+  Sophisticated kernels delay allocation of each page of memory until
+  the application tries to use that page -- as signaled by a page fault.
+  You'll add this lazy allocation feature to xv6 in this exercise.
+</p>
+
+<h2>Part One: Eliminate allocation from sbrk()</h2>
+
+<p>
+  Your first task is to delete page allocation from the sbrk(n) system
+  call implementation, which is the function <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sys_sbrk</a></code>()
+  in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3700);">sysproc.c</a></code>. The sbrk(n) system call grows the
+  process's memory size by n bytes, and then returns the start of the
+  newly allocated region (i.e., the old size). Your new sbrk(n) should
+  just increment the process's size (myproc()->sz) by n and return the
+  old size. It should not allocate memory -- so you should delete the
+  call to <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(2558);">growproc</a></code>() (but you still need to increase the process's
+  size!).
+</p>
+
+<p>
+  Try to guess what the result of this modification will be: what will
+  break?
+</p>
+
+<p>
+  Make this modification, boot xv6, and type <tt>echo hi</tt> to the shell.
+  You should see something like this:
+</p>
+
+<pre>
+  init: starting sh
+  $ echo hi
+  pid 3 sh: trap 14 err 6 on cpu 0 eip 0x12f1 addr 0x4004--kill proc
+  $ 
+</pre>
+
+<p>
+  The "pid 3 sh: trap..." message is from the kernel trap handler in
+  trap.c; it has caught a page fault (trap 14, or T_PGFLT), which the xv6 kernel
+  does not know how to handle. Make sure you understand why this page
+  fault occurs. The "addr 0x4004" indicates that the virtual address
+  that caused the page fault is 0x4004.
+</p>
+
+<h2>Part Two: Lazy allocation</h2>
+
+<p>
+  Modify the code in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3350);">trap.c</a></code> to respond to a page fault
+  from user space by mapping a newly-allocated page of physical memory
+  at the faulting address, and then returning back to user space to
+  let the process continue executing. You should add your code just
+  before the <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(8002);">cprintf</a></code> call that produced the "pid 3 sh: trap
+  14" message. Your code is not required to cover all corner cases and
+  error situations; it just needs to be good enough to let sh run
+  simple commands like echo and ls.
+</p>
+
+
+<p>
+  Hint: look at the <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(8002);">cprintf</a></code> arguments to see how to find the virtual
+  address that caused the page fault.
+</p>
+
+<p>
+  Hint: steal code from <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1927);">allocuvm</a></code>() in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1700);">vm.c</a></code>, which is what sbrk()
+  calls (via <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(2558);">growproc</a></code>()).
+</p>
+
+<p>
+  Hint: use <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(799);">PGROUNDDOWN</a></code>(va) to round the faulting virtual address
+  down to a page boundary.
+</p>
+
+<p>
+  Hint: <code>break</code> or <code>return</code> in order to avoid
+  the <code>cprintf</code> and the <code>myproc()->killed&nbsp;=&nbsp;1</code>.
+</p>
+
+<p>
+  Hint: you'll need to call <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1760);">mappages</a></code>(). In order to do this you'll need
+  to delete the <code>static</code> in the declaration of mappages()
+  in vm.c, and you'll need to declare mappages() in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3350);">trap.c</a></code>.
+  Add this declaration to trap.c before any call to <code>mappages()</code>:
+</p>
+
+<pre>
+  int mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm);
+</pre>
+
+<p>
+  Hint: you can check whether a fault is a page fault by checking if
+  <code>tf->trapno</code> is equal to <code>T_PGFLT</code> in trap().
+</p>
+
+<p>
+  If all goes well, your lazy allocation code should result in <code>echo
+  hi</code> working. You should get at least one page fault (and thus lazy
+  allocation) in the shell, and perhaps two.
+</p>
+
+<p>
+  By the way, this is not a fully correct implementation. See the challenges
+  below for a list of problems we're aware of.
+</p>
+
+<p>
+  Optional challenges: Handle negative <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sbrk</a></code>() arguments. Handle error cases such
+  as sbrk() arguments that are too large. Verify that <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(2580);">fork</a></code>() and <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(2627);">exit</a></code>()
+  work even if some sbrk()'d address have no memory allocated for them.
+  Correctly handle faults on the invalid page below the stack. Make sure
+  that kernel use of not-yet-allocated user addresses works -- for example,
+  if a program passes an sbrk()-allocated address to read().
+</p>
+
+          
+<h1>Homework: xv6 lazy page allocation</h1>
+
+<p>
+  One of the many neat tricks an OS can play with page table hardware
+is lazy allocation of heap memory. Xv6 applications ask the kernel for
+heap memory using the sbrk() system call. In the kernel we've given
+you, sbrk() allocates physical memory and maps it into the process's
+virtual address space. There are programs that allocate memory but
+never use it, for example to implement large sparse arrays.
+Sophisticated kernels delay allocation of each page of memory until
+the application tries to use that page -- as signaled by a page fault.
+You'll add this lazy allocation feature to xv6 in this exercise.
+</p>
+
+<h2>Part One: Eliminate allocation from sbrk()</h2>
+
+<p>
+  Your first task is to delete page allocation from the sbrk(n) system
+call implementation, which is the function <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sys_sbrk</a></code>() in
+sysproc.c. The <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sbrk</a></code>(n) system call grows the process's
+memory size by n bytes, and then returns the start of the newly
+allocated region (i.e., the old size). Your new sbrk(n) should just
+increment the process's size (myproc()->sz) by n and return the old
+size. It should not allocate memory -- so you should delete the call
+to growproc() (but you still need to increase the process's size!).
+</p>
+<p>
+  Try to guess what the result of this modification will be: what will
+break?
+</p>
+<p>
+  Make this modification, boot xv6, and type <code>echo hi</code> to the shell.
+You should see something like this:
+</p>
+<div class="highlight"><pre><span></span>$ 
+init: starting sh
+$ <span class="nb">echo</span> hi
+pid <span class="m">3</span> sh: <span class="nb">trap</span> <span class="m">14</span> err <span class="m">6</span> on cpu <span class="m">0</span> eip 0x12f1 addr 0x4004--kill proc
+$
+</pre></div>
+
+
+
+<p>
+  The "pid 3 sh: trap..." message is from the kernel trap handler in
+<code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3350);">trap.c</a></code>; it has caught a page fault (trap 14, or T_PGFLT), which the xv6 kernel
+does not know how to handle. Make sure you understand why this page
+fault occurs. The "addr 0x4004" indicates that the virtual address
+that caused the page fault is 0x4004.
+</p>
+<h3><p>§ Part Two: Lazy allocation</p></h3>
+
+<p>
+  Modify the code in trap.c to respond to a page fault from user space
+by mapping a newly-allocated page of physical memory at the faulting
+  address, and then returning back to user space to let the process
+continue executing. You should add your code just before
+the <code>cprintf</code> call that produced the "pid 3 sh: trap 14"
+message. Your code is not required to cover all corner cases and error
+situations; it just needs to be good enough to let sh run simple
+commands like echo and ls.
+</p>
+<p>
+  Hint: look at the cprintf arguments to see how to find the virtual
+address that caused the page fault.
+</p>
+<p>
+  Hint: steal code from <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1927);">allocuvm</a></code>() in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1700);">vm.c</a></code>, which is what <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3801);">sbrk</a></code>()
+calls (via <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(2558);">growproc</a></code>()).
+</p>
+<p>
+  Hint: use <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(799);">PGROUNDDOWN</a></code>(va) to round the faulting virtual address
+down to a page boundary.
+</p>
+<p>
+  Hint: <code>break</code> or <code>return</code> in order to avoid
+the <code>cprintf</code> and the <code>myproc()->killed&nbsp;=&nbsp;1</code>.
+</p>
+<p>
+  Hint: you'll need to call <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(1760);">mappages</a></code>(). In order to do this you'll need
+to delete the <code>static</code> in the declaration of mappages()
+in vm.c, and you'll need to declare mappages() in trap.c.
+Add this declaration to trap.c before any call to <code>mappages()</code>:
+</p>
+<div class="highlight"><pre><span></span><span class="kt">int</span> <span class="nf">mappages</span><span class="p">(</span><span class="n">pde_t</span> <span class="o">*</span><span class="n">pgdir</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">va</span><span class="p">,</span> <span class="n">uint</span> <span class="n">size</span><span class="p">,</span> <span class="n">uint</span> <span class="n">pa</span><span class="p">,</span> <span class="kt">int</span> <span class="n">perm</span><span class="p">);</span>
+</pre></div>
+
+
+
+<p>
+Hint: you can check whether a fault is a page fault by checking if
+<code>tf->trapno</code> is equal to <code>T_PGFLT</code> in <code><a onclick="event.stopPropagation()" href="javascript:gotoLine(3401);">trap</a></code>().
+  </p>
+<p>
+  If all goes well, your lazy allocation code should result in <code>echo
+hi</code> working. You should get at least one page fault (and thus lazy
+allocation) in the shell, and perhaps two.
+</p>
+<p>
+  By the way, this is not a fully correct implementation. See the challenges
+below for a list of problems we're aware of.
+</p>
+<p>
+  Optional challenges: Handle negative sbrk() arguments. Handle error cases such
+as sbrk() arguments that are too large. Verify that fork() and exit()
+work even if some sbrk()'d address have no memory allocated for them.
+Correctly handle faults on the invalid page below the stack. Make sure
+that kernel use of not-yet-allocated user addresses works -- for example,
+if a program passes an sbrk()-allocated address to read().
+</p>
+<p>
+  <b>Submit</b>: The code that you added to trap.c in a file
+named <em>hwN.c</em> where <em>N</em> is the homework number as listed
+on the schedule.
+</p>
+
+          <h2>Homework: xv6 CPU alarm</h2>
+
+
+<p>
+  In this exercise you'll add a feature to xv6 that periodically alerts
+  a process as it uses CPU time. This might be useful for compute-bound
+  processes that want to limit how much CPU time they chew up, or for
+  processes that want to compute but also want to take some periodic
+  action. More generally, you'll be implementing a primitive form of
+  user-level interrupt/fault handlers; you could use something similar
+  to handle page faults in the application, for example.
+</p>
+
+<p>
+  You should add a new <code>alarm(interval, handler)</code> system call.
+  If an application calls <code>alarm(n, fn)</code>, then after every
+  <code>n</code> "ticks" of CPU time that the program consumes, the kernel
+  will cause application function
+  <code>fn</code> to be called. When <code>fn</code> returns, the application
+  will resume where it left off. A tick is a fairly arbitrary unit of
+  time in xv6, determined by how often a hardware timer generates
+  interrupts.
+</p>
+
+<p>
+  You should put the following example program in <code>alarmtest.c</code>:
+</p>
+
+<div class="highlight"><pre><span></span><span class="cp">#include</span> <span class="cpf">&quot;stat.h&quot;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&quot;types.h&quot;</span><span class="cp"></span>
+<span class="cp">#include</span> <span class="cpf">&quot;user.h&quot;</span><span class="cp"></span>
+
+<span class="kt">void</span> <span class="nf">periodic</span><span class="p">();</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">argv</span><span class="p">[])</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+  <span class="n">printf</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">&quot;alarmtest starting</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+  <span class="n">alarm</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">periodic</span><span class="p">);</span>
+  <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">25</span> <span class="o">*</span> <span class="mi">500000</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">i</span> <span class="o">%</span> <span class="mi">250000</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="n">write</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="n">exit</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="nf">periodic</span><span class="p">()</span> <span class="p">{</span> <span class="n">printf</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">&quot;alarm!</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span> <span class="p">}</span>
+</pre></div>
+
+
+
+<p>
+  The program calls <code>alarm(10, periodic)</code> to ask the kernel to
+  force a call to <code>periodic()</code> every 10 ticks, and then spins for
+  a while. After you have implemented the <code>alarm()</code> system call in the kernel,
+  <code>alarmtest</code> should produce output like this:
+</p>
+
+<pre>
+  $ alarmtest
+  alarmtest starting
+  .....alarm!
+  ....alarm!
+  .....alarm!
+  ......alarm!
+  .....alarm!
+  ....alarm!
+  ....alarm!
+  ......alarm!
+  .....alarm!
+  ...alarm!
+  ...$ 
+</pre>
+<p>
+
+  <p>
+    (If you only see one "alarm!", try increasing the number of iterations in
+    <code>alarmtest.c</code> by 10x.)
+  </p>
+
+  <p>
+    Hint: you'll need to modify the Makefile to cause <code>alarmtest.c</code>
+    to be compiled as an xv6 user program.
+  </p>
+
+  <p>
+    Hint: the right declaration to put in <code>user.h</code> is:
+  </p>
+
+  <div class="highlight"><pre><span></span><span class="kt">int</span> <span class="nf">alarm</span><span class="p">(</span><span class="kt">int</span> <span class="n">ticks</span><span class="p">,</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">handler</span><span class="p">)());</span>
+</pre></div>
+
+
+
+  <p>
+    Hint: You will also have to update <code>syscall.h</code> and <code>usys.S</code> to
+    allow <code>alarmtest</code> to invoke the alarm system call.
+  </p>
+
+  <p>
+    Hint: Your <code>sys_alarm()</code> should store the alarm interval and the
+    pointer to the handler function in new fields in the <code>proc</code>
+    structure; see <code>proc.h</code>.
+  </p>
+
+  <p>
+    Hint: here's a <code>sys_alarm()</code> for free:
+  </p>
+
+  <div class="highlight"><pre><span></span><span class="kt">int</span> <span class="nf">sys_alarm</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">ticks</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">handler</span><span class="p">)();</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">argint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">ticks</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">argptr</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="kt">char</span> <span class="o">**</span><span class="p">)</span><span class="o">&amp;</span><span class="n">handler</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+  <span class="n">myproc</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">alarmticks</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">;</span>
+  <span class="n">myproc</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">alarmhandler</span> <span class="o">=</span> <span class="n">handler</span><span class="p">;</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+
+  <p>
+    Add it to <code>syscall.c</code> and add an entry for <code>SYS_ALARM</code>
+    to the <code>syscalls</code> array in that file.
+  </p>
+
+  <p>
+    Hint: You'll need to keep track of how many ticks have passed since
+    the last call
+    (or are left until the next call) to a process's alarm handler;
+    you'll need a new field in <code>struct&nbsp;proc</code> for this too.
+    You can initialize <code>proc</code> fields in <code>allocproc()</code>
+    in <code>proc.c</code>.
+  </p>
+
+  <p>
+    Hint: Every tick, the hardware clock forces an interrupt, which
+    is handled in <code>trap()</code> by <code>case&nbsp;T_IRQ0&nbsp;+&nbsp;IRQ_TIMER</code>;
+    you should add some code here.
+  </p>
+    <p>
+      Hint: You only want to manipulate a process's alarm ticks if there's a
+      process running and if the timer interrupt came from user space;
+      you want something like
+    </p>
+
+    <div class="highlight"><pre><span></span><span class="k">if</span> <span class="p">(</span><span class="n">myproc</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">tf</span><span class="o">-&gt;</span><span class="n">cs</span> <span class="o">&amp;</span> <span class="mi">3</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">)</span>
+<span class="p">...</span>
+</pre></div>
+
+
+
+    <p>
+      Hint: In your <code>IRQ_TIMER</code> code, when a process's alarm interval
+      expires, you'll want to cause it to execute its handler. How can you
+      do that?
+    </p>
+
+    <p>
+      Hint: You need to arrange things so that, when the handler returns,
+      the process resumes executing where it left off. How can you do that?
+    </p>
+    <p>
+      Hint: You can see the assembly code for the alarmtest program in alarmtest.asm.
+    </p>
+    <p>
+      Hint: It will be easier to look at traps with gdb if you tell qemu to use
+      only one CPU, which you can do by running
+    </p>
+
+    <div class="highlight"><pre><span></span>$ make <span class="nv">CPUS</span><span class="o">=</span><span class="m">1</span> qemu
+</pre></div>
+
+
+
+    <p>
+      It's OK if your solution doesn't save the caller-saved user registers
+      when calling the handler.
+    </p>
+    
+    <p>
+      Optional challenges: 1) Save and restore the caller-saved user
+      registers around the call to handler. 2) Prevent re-entrant
+      calls to the handler -- if a handler hasn't returned yet, don't
+      call it again. 3) Assuming your code doesn't check that
+      <code>tf->esp</code> is valid, implement a security attack on the
+      kernel that exploits your alarm handler calling code.
+    </p>
+
+The code that you added to trap.c.
+          
           
 
 
 <hr>
 <h1><a name="chapter3">CHAPTER 3</a></h1>
 
-<h1>Traps, interrupts and drivers</h1>
+<center><h1>Traps, interrupts and drivers</h1></center>
 
 <div>
   <p>

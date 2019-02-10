@@ -110,6 +110,10 @@ var mod = function(){
                 "%eip": "instruction pointer register",
                 "DPL": "descriptor priviledge level",
                 " IF ": " interrupt enable flag ",
+                "80386": "eighty three eighty six",
+                "setupkvm": "setup K V M",
+                "1-2": "1 2",
+                "KERNBASE": "kern base",
             };
             var txt = this.txt;
             for (const key of Object.keys(acros)) {
